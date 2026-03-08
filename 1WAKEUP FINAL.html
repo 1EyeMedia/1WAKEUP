@@ -1,0 +1,1256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WAKEUP — Brutal Focus Timer</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Share+Tech+Mono&display=swap');
+
+  :root {
+    --red: #ff1a1a;
+    --dark-red: #8b0000;
+    --black: #030303;
+    --white: #f0f0f0;
+    --dim: #444;
+    --green: #00ff88;
+    --orange: #ff8800;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--black);
+    color: var(--white);
+    font-family: 'Share Tech Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    overflow-x: hidden;
+    position: relative;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,26,26,0.025) 2px, rgba(255,26,26,0.025) 4px);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    padding: 28px 48px 32px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 60px;
+    align-items: start;
+  }
+
+  .top-bar {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #0f0f0f;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .col-left { grid-column: 1; }
+
+  .col-right {
+    grid-column: 2;
+    border-left: 1px solid #111;
+    padding-left: 60px;
+    padding-top: 4px;
+  }
+
+  .bottom-bar {
+    grid-column: 1 / -1;
+    border-top: 1px solid #111;
+    padding-top: 14px;
+    margin-top: 16px;
+  }
+
+  @media (max-width: 860px) {
+    .container { grid-template-columns: 1fr; padding: 20px; gap: 0; }
+    .top-bar, .bottom-bar { grid-column: 1; }
+    .col-left, .col-right { grid-column: 1; }
+    .col-right { border-left: none; padding-left: 0; border-top: 1px solid #111; padding-top: 24px; margin-top: 16px; }
+  }
+
+  .brand {
+    font-family: 'Black Han Sans', sans-serif;
+    font-size: clamp(42px, 10vw, 80px);
+    letter-spacing: -2px;
+    color: var(--red);
+    line-height: 1;
+    text-shadow: 4px 4px 0 var(--dark-red), 0 0 40px rgba(255,26,26,0.4);
+    animation: flicker 8s infinite;
+  }
+
+  @keyframes flicker {
+    0%,94%,96%,98%,100% { opacity: 1; }
+    95% { opacity: 0.8; }
+    97% { opacity: 0.6; }
+    99% { opacity: 0.9; }
+  }
+
+  .tagline {
+    font-size: 10px;
+    color: var(--dim);
+    text-transform: uppercase;
+    letter-spacing: 4px;
+    margin-bottom: 32px;
+    margin-top: 4px;
+  }
+
+  .label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    color: var(--dim);
+    margin-bottom: 7px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .field-wrap { margin-bottom: 18px; }
+
+  textarea {
+    width: 100%;
+    background: #080808;
+    border: 1px solid #1a1a1a;
+    border-left: 3px solid var(--red);
+    color: var(--white);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 14px;
+    padding: 14px;
+    resize: vertical;
+    min-height: 100px;
+    outline: none;
+    transition: box-shadow 0.2s;
+    line-height: 1.6;
+  }
+
+  textarea:focus { box-shadow: 0 0 0 1px rgba(255,26,26,0.3); }
+  textarea::placeholder { color: #2a2a2a; }
+
+  .row { display: flex; gap: 12px; flex-wrap: wrap; }
+
+  .field { flex: 1; min-width: 120px; }
+
+  input[type="number"], input[type="text"], input[type="password"], select {
+    width: 100%;
+    background: #080808;
+    border: 1px solid #1a1a1a;
+    border-left: 3px solid #252525;
+    color: var(--white);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 15px;
+    padding: 11px 14px;
+    outline: none;
+    transition: border-left-color 0.2s;
+  }
+
+  input:focus, select:focus { border-left-color: var(--red); }
+  input[type="number"]::-webkit-inner-spin-button { opacity: 0; }
+  input::placeholder { color: #2a2a2a; }
+  option { background: #111; }
+
+  /* Voice engine tabs */
+  .engine-tabs { display: flex; gap: 0; margin-bottom: 7px; }
+
+  .etab {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 7px 14px;
+    border: 1px solid #1a1a1a;
+    background: transparent;
+    color: var(--dim);
+    cursor: pointer;
+    transition: all 0.15s;
+    margin-right: -1px;
+  }
+
+  .etab.active {
+    background: #1a0000;
+    border-color: var(--dark-red);
+    color: var(--red);
+    z-index: 1;
+  }
+
+  .etab:hover:not(.active) { color: #888; }
+
+  .engine-panel { display: none; }
+  .engine-panel.active { display: block; }
+
+  /* Buttons */
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 20px; }
+
+  .btn {
+    font-family: 'Black Han Sans', sans-serif;
+    font-size: 16px;
+    letter-spacing: 2px;
+    padding: 13px 24px;
+    border: none;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.12s;
+    flex: 1;
+  }
+
+  .btn-start { background: var(--red); color: #000; min-width: 140px; }
+  .btn-start:hover { background: #ff3333; box-shadow: 0 0 24px rgba(255,26,26,0.45); }
+  .btn-start:disabled { background: #330000; color: #660000; cursor: not-allowed; }
+
+  .btn-stop {
+    background: transparent;
+    color: var(--dim);
+    border: 1px solid #1f1f1f;
+    flex: 0;
+    min-width: 90px;
+  }
+
+  .btn-stop:hover { border-color: #444; color: var(--white); }
+
+  .btn-test {
+    background: transparent;
+    color: var(--red);
+    border: 1px solid var(--dark-red);
+    font-size: 12px;
+    padding: 10px 16px;
+    flex: 0;
+  }
+
+  .btn-test:hover { background: rgba(255,26,26,0.07); }
+
+  /* Volume */
+  .vol-row { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    flex: 1;
+    height: 2px;
+    background: #1a1a1a;
+    outline: none;
+    border: none;
+    padding: 0;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 13px;
+    height: 13px;
+    background: var(--red);
+    cursor: pointer;
+    border-radius: 0;
+  }
+
+  /* Timer display */
+  .timer-display { padding: 30px 0 10px; text-align: center; }
+
+  @keyframes fadeUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+
+  .countdown {
+    font-family: 'Black Han Sans', sans-serif;
+    font-size: clamp(64px, 18vw, 110px);
+    letter-spacing: -4px;
+    line-height: 1;
+    transition: color 0.4s;
+  }
+
+  .countdown.warn { color: var(--orange); text-shadow: 0 0 40px rgba(255,136,0,0.3); }
+  .countdown.danger { color: var(--red); text-shadow: 0 0 40px rgba(255,26,26,0.4); animation: pulse 0.6s infinite alternate; }
+
+  @keyframes pulse { from {opacity:1;} to {opacity:0.65;} }
+
+  .timer-sub { font-size: 10px; letter-spacing: 4px; color: var(--dim); text-transform: uppercase; margin-top: 6px; }
+  .ring-ct { margin-top: 10px; font-size: 11px; color: #333; letter-spacing: 2px; }
+  .ring-ct b { color: var(--red); font-style: normal; font-size: 15px; }
+
+  /* Status bar */
+  .status-bar {
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--dim);
+    text-transform: uppercase;
+    border-top: 1px solid #111;
+    padding-top: 14px;
+    margin-top: 20px;
+  }
+
+  .dot {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #222;
+    margin-right: 6px;
+    vertical-align: middle;
+    transition: all 0.3s;
+  }
+
+  .dot.live { background: var(--green); box-shadow: 0 0 7px var(--green); animation: blink 1.2s infinite; }
+  .dot.warn { background: var(--orange); box-shadow: 0 0 7px var(--orange); }
+  @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+
+  /* Scream overlay */
+  .scream {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: #c00000;
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    text-align: center;
+    padding: 40px;
+    animation: shake 0.08s infinite;
+  }
+
+  .scream.active { display: flex; }
+
+  @keyframes shake {
+    0%,100% { transform: translate(0,0) rotate(0deg); }
+    20% { transform: translate(-4px,2px) rotate(-0.3deg); }
+    40% { transform: translate(4px,-3px) rotate(0.3deg); }
+    60% { transform: translate(-3px,4px) rotate(-0.2deg); }
+    80% { transform: translate(3px,-2px) rotate(0.2deg); }
+  }
+
+  .scream-msg {
+    font-family: 'Black Han Sans', sans-serif;
+    font-size: clamp(26px, 5.5vw, 54px);
+    color: #fff;
+    text-shadow: 3px 3px 0 #000;
+    max-width: 640px;
+    line-height: 1.25;
+  }
+
+  .scream-dismiss {
+    margin-top: 36px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.25);
+    color: rgba(255,255,255,0.8);
+    padding: 11px 28px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .scream-dismiss:hover { background: rgba(0,0,0,0.5); }
+
+  .scream-n {
+    position: absolute;
+    top: 18px; right: 22px;
+    font-family: 'Black Han Sans', sans-serif;
+    font-size: 80px;
+    color: rgba(255,255,255,0.08);
+    letter-spacing: -3px;
+    pointer-events: none;
+  }
+
+  /* Badge strip */
+  .badges { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; }
+
+  .badge {
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border: 1px solid;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .badge-ok { border-color: #003320; color: var(--green); }
+  .badge-warn { border-color: #332500; color: var(--orange); }
+  .badge-off { border-color: #1a1a1a; color: #333; }
+
+  .hint { font-size: 10px; color: #2a2a2a; letter-spacing: 1px; margin-top: 5px; }
+
+  hr.divider { border: none; border-top: 1px solid #111; margin: 20px 0; }
+
+  /* ─── LOG PANEL ─── */
+  .log-panel {
+    margin-top: 24px;
+    border-top: 1px solid #111;
+    padding-top: 18px;
+  }
+
+  .log-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .log-list {
+    max-height: 280px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-right: 4px;
+  }
+
+  .log-list::-webkit-scrollbar { width: 3px; }
+  .log-list::-webkit-scrollbar-track { background: #0a0a0a; }
+  .log-list::-webkit-scrollbar-thumb { background: var(--dark-red); }
+
+  .log-entry {
+    background: #080808;
+    border: 1px solid #141414;
+    border-left: 3px solid #222;
+    padding: 10px 12px;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .log-entry.logged { border-left-color: var(--green); }
+  .log-entry.missed { border-left-color: var(--red); }
+
+  .log-entry-meta {
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: var(--dim);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  .log-entry-text { color: #ccc; font-size: 12px; }
+
+  .log-empty { font-size: 11px; color: #222; letter-spacing: 2px; text-align: center; padding: 20px 0; }
+
+  /* Work log modal */
+  .log-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.92);
+    z-index: 300;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+
+  .log-modal.active { display: flex; }
+
+  .log-modal-box {
+    background: #0a0a0a;
+    border: 1px solid #222;
+    border-top: 3px solid var(--green);
+    padding: 28px;
+    width: min(520px, 95vw);
+  }
+
+  .log-modal-title {
+    font-family: 'Black Han Sans', sans-serif;
+    font-size: 22px;
+    color: var(--green);
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+  }
+
+  .log-modal-sub {
+    font-size: 10px;
+    color: var(--dim);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 18px;
+  }
+
+  .log-modal textarea {
+    border-left-color: var(--green);
+    min-height: 80px;
+    font-size: 13px;
+  }
+
+  .log-modal-btns { display: flex; gap: 10px; margin-top: 14px; }
+
+  .btn-green {
+    background: var(--green);
+    color: #000;
+    font-family: 'Black Han Sans', sans-serif;
+    font-size: 15px;
+    letter-spacing: 2px;
+    padding: 12px 22px;
+    border: none;
+    cursor: pointer;
+    text-transform: uppercase;
+    flex: 1;
+  }
+
+  .btn-green:hover { background: #00ffaa; }
+
+  .btn-skip {
+    background: transparent;
+    color: var(--dim);
+    border: 1px solid #222;
+    font-family: 'Black Han Sans', sans-serif;
+    font-size: 13px;
+    letter-spacing: 2px;
+    padding: 12px 18px;
+    cursor: pointer;
+    text-transform: uppercase;
+    flex: 0;
+  }
+
+  .btn-skip:hover { color: var(--red); border-color: var(--red); }
+
+  .btn-reset {
+    background: transparent;
+    color: #333;
+    border: 1px solid #1a1a1a;
+    font-family: 'Black Han Sans', sans-serif;
+    font-size: 12px;
+    letter-spacing: 2px;
+    padding: 8px 14px;
+    cursor: pointer;
+    text-transform: uppercase;
+  }
+
+  .btn-reset:hover { color: var(--orange); border-color: var(--orange); }
+
+  .btn-export {
+    background: transparent;
+    color: var(--green);
+    border: 1px solid #003320;
+    font-family: 'Black Han Sans', sans-serif;
+    font-size: 12px;
+    letter-spacing: 2px;
+    padding: 8px 14px;
+    cursor: pointer;
+    text-transform: uppercase;
+  }
+
+  .btn-export:hover { background: rgba(0,255,136,0.07); }
+</style>
+</head>
+<body>
+
+
+<!-- Work Log Modal (shown on scream dismiss) -->
+<div class="log-modal" id="logModal">
+  <div class="log-modal-box">
+    <div class="log-modal-title">✓ STILL WORKING</div>
+    <div class="log-modal-sub" id="logModalSub">Interval #1 — what did you do these last N minutes?</div>
+    <textarea id="logInput" placeholder="e.g. Solved 15 GAT questions, read Hindu editorial on inflation..." rows="4"></textarea>
+    <div class="log-modal-btns">
+      <button class="btn-green" onclick="submitLog()">LOG IT & DISMISS</button>
+      <button class="btn-skip" onclick="skipLog()">SKIP LOG</button>
+    </div>
+  </div>
+</div>
+
+<!-- Scream Overlay -->
+<div class="scream" id="scream">
+  <div class="scream-n" id="screamN">01</div>
+  <div class="scream-msg" id="screamMsg">GET BACK TO WORK.</div>
+  <button class="scream-dismiss" onclick="dismissScream()">✓ I AM WORKING — DISMISS</button>
+</div>
+
+<div class="container">
+
+  <!-- TOP BAR -->
+  <div class="top-bar">
+    <div>
+      <div class="brand">WAKEUP</div>
+      <div class="tagline">No mercy. No comfort. Just work.</div>
+    </div>
+    <div class="badges">
+      <div class="badge badge-off" id="wlBadge">⬤ WAKE LOCK: CHECKING</div>
+      <div class="badge badge-off" id="clkBadge">⬤ SYSTEM CLOCK: SYNCED</div>
+      <div class="badge badge-off" id="voiceBadge">⬤ VOICE: BROWSER TTS</div>
+    </div>
+  </div>
+
+  <!-- LEFT COL: CONFIG -->
+  <div class="col-left">
+
+    <div class="field-wrap">
+      <div class="label">Your war cry</div>
+      <textarea id="msgInput" style="min-height:130px" placeholder="e.g. Motherfucker wake up. Stop drifting. Allahabad University is not going to wait for you. GET BACK NOW."></textarea>
+    </div>
+
+    <div class="row">
+      <div class="field field-wrap">
+        <div class="label">Interval (minutes)</div>
+        <input type="number" id="intervalInput" value="30" min="1" max="180">
+        <div class="hint">screams every N minutes</div>
+      </div>
+      <div class="field field-wrap">
+        <div class="label">Extra alarms (min) <span style="color:#222;font-size:9px">optional</span></div>
+        <input type="text" id="extraTimes" placeholder="e.g. 10, 20, 45">
+        <div class="hint">comma-separated from start</div>
+      </div>
+    </div>
+
+    <hr class="divider">
+
+    <!-- Voice engine -->
+    <div class="field-wrap">
+      <div class="label">Voice Engine</div>
+      <div class="engine-tabs">
+        <button class="etab active" onclick="switchEngine('browser', event)">Browser TTS</button>
+        <button class="etab" onclick="switchEngine('elevenlabs', event)">ElevenLabs (Realistic)</button>
+      </div>
+
+      <div class="engine-panel active" id="panel-browser">
+        <select id="voiceSelect" style="width:100%"></select>
+        <div class="hint" style="margin-top:5px">★ Microsoft / ◆ Google voices are best quality</div>
+      </div>
+
+      <div class="engine-panel" id="panel-elevenlabs">
+        <div class="row" style="margin-bottom:8px">
+          <div class="field">
+            <input type="password" id="elKey" placeholder="ElevenLabs API key">
+          </div>
+          <button class="btn btn-test" style="flex:0;white-space:nowrap" onclick="testElKey()">TEST KEY</button>
+        </div>
+        <div id="elKeyStatus" class="hint" style="margin-bottom:10px;color:#2a2a2a">— paste key and click TEST KEY</div>
+
+        <div class="row" style="margin-bottom:8px">
+          <div class="field">
+            <input type="text" id="elVoiceId" placeholder="Voice ID (blank = Adam)">
+          </div>
+          <button class="btn btn-test" style="flex:0;white-space:nowrap" onclick="testElVoice()">TEST VOICE</button>
+        </div>
+        <div id="elVoiceStatus" class="hint" style="margin-bottom:6px;color:#2a2a2a">— click TEST VOICE to hear a sample</div>
+        <div class="hint">Free voices: Adam = pNInz6obpgDQGcFmaJgB &nbsp;|&nbsp; Josh = TxGEqnHWrfWFTfGW9XjX &nbsp;|&nbsp; <a href="https://elevenlabs.io/app/voice-library" target="_blank" style="color:#333">browse ↗</a></div>
+      </div>
+    </div>
+
+    <!-- Volume -->
+    <div class="vol-row" style="margin-top:8px">
+      <span style="font-size:10px;letter-spacing:2px;color:var(--dim);white-space:nowrap;text-transform:uppercase">VOL</span>
+      <input type="range" id="volRange" min="0" max="1" step="0.05" value="1">
+      <span id="volPct" style="font-size:11px;color:var(--dim);width:34px;text-align:right">100%</span>
+    </div>
+
+    <!-- Buttons -->
+    <div class="btn-row">
+      <button class="btn btn-start" id="startBtn" onclick="startTimer()">▶ START</button>
+      <button class="btn btn-stop" onclick="stopTimer()">■ STOP</button>
+      <button class="btn btn-test" onclick="testScream()">TEST SCREAM</button>
+    </div>
+
+  </div>
+
+  <!-- RIGHT COL: TIMER -->
+  <div class="col-right">
+    <div style="text-align:center;padding:20px 0;">
+      <div class="countdown" id="countdown">--:--</div>
+      <div class="timer-sub">until next scream</div>
+      <div class="ring-ct" style="margin-top:14px">Screamed <b id="ringCount">0</b> times this session</div>
+
+    <!-- Log Panel -->
+    <div class="log-panel">
+      <div class="log-header">
+        <div class="label" style="margin:0">Session Log</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn-reset" onclick="resetSession()">↺ RESET SESSION</button>
+          <button class="btn-export" onclick="exportLog()">↓ EXPORT</button>
+        </div>
+      </div>
+      <div class="log-list" id="logList">
+        <div class="log-empty" id="logEmpty">— no intervals logged yet —</div>
+      </div>
+    </div>
+
+    </div>
+
+    <!-- Session info -->
+    <div style="margin-top:32px;border-top:1px solid #111;padding-top:20px;">
+      <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+        <div>
+          <div class="label">Session Time</div>
+          <div id="sessionClock" style="font-size:22px;letter-spacing:2px;color:#2a2a2a;font-family:'Share Tech Mono',monospace">00:00:00</div>
+        </div>
+        <div style="text-align:right">
+          <div class="label">Current Time</div>
+          <div id="realClock" style="font-size:22px;letter-spacing:2px;color:#2a2a2a;font-family:'Share Tech Mono',monospace">--:--:--</div>
+        </div>
+      </div>
+
+      <div style="margin-top:24px;display:flex;align-items:center;gap:8px;">
+        <span class="dot" id="statusDot"></span>
+        <span id="statusText" style="font-size:11px;letter-spacing:3px;text-transform:uppercase;color:var(--dim)">IDLE</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTOM BAR -->
+  <div class="bottom-bar">
+    <div style="font-size:9px;color:#1a1a1a;letter-spacing:2px;text-transform:uppercase">WAKEUP — BRUTAL FOCUS SYSTEM — NO MERCY</div>
+  </div>
+
+</div>
+
+<script>
+/* ─── STATE ─── */
+let running = false;
+let wakeLock = null;
+let timerRAF = null;
+let sessionRAF = null;
+let startEpoch = 0;          // system epoch when timer started
+let intervalMs = 0;          // interval in ms
+let sessionStart = 0;        // epoch session started
+let ringCount = 0;
+let nextRingEpoch = 0;       // next scheduled scream (epoch ms)
+let extraRingEpochs = [];    // one-off extra screams
+let firedExtras = new Set();
+let engine = 'browser';
+let voices = [];
+let audioCtx = null;         // for keep-alive oscillator
+
+/* ─── WAKE LOCK ─── */
+async function requestWakeLock() {
+  try {
+    if ('wakeLock' in navigator) {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => {
+        setBadge('wlBadge', 'warn', '⚠ WAKE LOCK: RELEASED (tab hidden)');
+        if (running) reacquireWakeLock();
+      });
+      setBadge('wlBadge', 'ok', '✓ WAKE LOCK: ACTIVE');
+    } else {
+      setBadge('wlBadge', 'warn', '⚠ WAKE LOCK: NOT SUPPORTED');
+    }
+  } catch(e) {
+    setBadge('wlBadge', 'warn', '⚠ WAKE LOCK: DENIED');
+  }
+}
+
+async function reacquireWakeLock() {
+  await new Promise(r => setTimeout(r, 2000));
+  if (running) requestWakeLock();
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && running && (!wakeLock || wakeLock.released)) {
+    requestWakeLock();
+  }
+});
+
+/* Keep-alive: silent audio oscillator — stops browser throttling timers */
+function startKeepAlive() {
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const oscillator = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  gain.gain.value = 0.00001; // essentially silent
+  oscillator.connect(gain);
+  gain.connect(audioCtx.destination);
+  oscillator.start();
+}
+
+function stopKeepAlive() {
+  if (audioCtx) { audioCtx.close(); audioCtx = null; }
+}
+
+/* ─── CLOCK BADGE ─── */
+setBadge('clkBadge', 'ok', '✓ SYSTEM CLOCK: SYNCED');
+
+/* ─── REAL CLOCK ─── */
+function tickClock() {
+  const now = new Date();
+  document.getElementById('realClock').textContent =
+    now.toLocaleTimeString('en-IN', {hour12: false});
+  requestAnimationFrame(tickClock);
+}
+requestAnimationFrame(tickClock);
+
+/* ─── VOICES ─── */
+function loadVoices() {
+  voices = speechSynthesis.getVoices();
+  const sel = document.getElementById('voiceSelect');
+  sel.innerHTML = '';
+  if (!voices.length) return;
+
+  // Prioritise Microsoft/Google voices (much better)
+  const priority = voices.filter(v => /microsoft|google/i.test(v.name) && v.lang.startsWith('en'));
+  const rest = voices.filter(v => !/microsoft|google/i.test(v.name) && v.lang.startsWith('en'));
+  const others = voices.filter(v => !v.lang.startsWith('en'));
+
+  [...priority, ...rest, ...others].forEach((v, i) => {
+    const opt = document.createElement('option');
+    opt.value = voices.indexOf(v);
+    const tag = /microsoft/i.test(v.name) ? '★ ' : /google/i.test(v.name) ? '◆ ' : '';
+    opt.textContent = `${tag}${v.name} (${v.lang})`;
+    if (priority.length && v === priority[0]) opt.selected = true;
+    sel.appendChild(opt);
+  });
+
+  setBadge('voiceBadge', 'ok', '✓ VOICE: BROWSER TTS READY');
+}
+
+speechSynthesis.onvoiceschanged = loadVoices;
+loadVoices();
+
+/* ─── ELEVENLABS CONNECTION TESTS ─── */
+async function testElKey() {
+  const key = document.getElementById('elKey').value.trim();
+  const statusEl = document.getElementById('elKeyStatus');
+  if (!key) { statusEl.style.color = '#ff8800'; statusEl.textContent = '⚠ Paste your API key first.'; return; }
+
+  statusEl.style.color = '#444';
+  statusEl.textContent = '⏳ Checking...';
+
+  try {
+    const res = await fetch('https://api.elevenlabs.io/v1/user', {
+      headers: { 'xi-api-key': key }
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const charsLeft = data?.subscription?.character_limit - data?.subscription?.character_count;
+      statusEl.style.color = 'var(--green)';
+      statusEl.textContent = `✓ KEY VALID — ${charsLeft?.toLocaleString() ?? '?'} characters remaining this month`;
+      setBadge('voiceBadge', 'ok', '✓ ELEVENLABS: KEY VERIFIED');
+    } else if (res.status === 401) {
+      statusEl.style.color = 'var(--red)';
+      statusEl.textContent = '✗ INVALID KEY — 401 Unauthorized. Regenerate at elevenlabs.io';
+      setBadge('voiceBadge', 'warn', '✗ ELEVENLABS: KEY INVALID');
+    } else {
+      statusEl.style.color = 'var(--orange)';
+      statusEl.textContent = `⚠ Unexpected response: ${res.status}`;
+    }
+  } catch(e) {
+    statusEl.style.color = 'var(--orange)';
+    statusEl.textContent = '⚠ Network error — check internet connection. Error: ' + e.message;
+  }
+}
+
+async function testElVoice() {
+  const key = document.getElementById('elKey').value.trim();
+  const vid = document.getElementById('elVoiceId').value.trim() || 'pNInz6obpgDQGcFmaJgB';
+  const statusEl = document.getElementById('elVoiceStatus');
+  const vol = parseFloat(document.getElementById('volRange').value);
+
+  if (!key) { statusEl.style.color = '#ff8800'; statusEl.textContent = '⚠ Test your API key first.'; return; }
+
+  statusEl.style.color = '#444';
+  statusEl.textContent = '⏳ Fetching voice sample...';
+
+  try {
+    const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${vid}`, {
+      method: 'POST',
+      headers: { 'xi-api-key': key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text: 'Uth. Kaam kar. Abhi.',
+        model_id: 'eleven_turbo_v2',
+        voice_settings: { stability: 0.35, similarity_boost: 0.85, style: 0.4, use_speaker_boost: true }
+      })
+    });
+
+    if (res.ok) {
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audio.volume = vol;
+      audio.play();
+      audio.onended = () => URL.revokeObjectURL(url);
+      statusEl.style.color = 'var(--green)';
+      statusEl.textContent = '✓ VOICE WORKS — playing sample now';
+      setBadge('voiceBadge', 'ok', '✓ ELEVENLABS: VOICE VERIFIED');
+    } else if (res.status === 401) {
+      statusEl.style.color = 'var(--red)';
+      statusEl.textContent = '✗ API key rejected — recheck key';
+    } else if (res.status === 404) {
+      statusEl.style.color = 'var(--red)';
+      statusEl.textContent = '✗ VOICE ID NOT FOUND — double check the ID from elevenlabs.io';
+    } else {
+      const err = await res.json().catch(() => ({}));
+      statusEl.style.color = 'var(--red)';
+      statusEl.textContent = `✗ Error ${res.status}: ${err?.detail?.message || 'unknown error'}`;
+    }
+  } catch(e) {
+    statusEl.style.color = 'var(--orange)';
+    statusEl.textContent = '⚠ Network error: ' + e.message;
+  }
+}
+
+/* ─── ENGINE SWITCH ─── */
+function switchEngine(e, evt) {
+  engine = e;
+  document.querySelectorAll('.etab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.engine-panel').forEach(p => p.classList.remove('active'));
+  if (evt) evt.target.classList.add('active');
+  document.getElementById('panel-' + e).classList.add('active');
+
+  if (e === 'elevenlabs') {
+    setBadge('voiceBadge', 'warn', '⚠ VOICE: ENTER ELEVENLABS KEY');
+  } else {
+    setBadge('voiceBadge', 'ok', '✓ VOICE: BROWSER TTS READY');
+  }
+}
+
+/* ─── SPEAK ─── */
+async function speak(text) {
+  const vol = parseFloat(document.getElementById('volRange').value);
+
+  if (engine === 'elevenlabs') {
+    const key = document.getElementById('elKey').value.trim();
+    const vid = document.getElementById('elVoiceId').value.trim() || 'pNInz6obpgDQGcFmaJgB';
+    if (!key) { speakBrowser(text, vol); return; }
+
+    try {
+      const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${vid}`, {
+        method: 'POST',
+        headers: {
+          'xi-api-key': key,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          text: text,
+          model_id: 'eleven_turbo_v2',
+          voice_settings: { stability: 0.35, similarity_boost: 0.85, style: 0.4, use_speaker_boost: true }
+        })
+      });
+
+      if (!res.ok) { speakBrowser(text, vol); return; }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audio.volume = vol;
+      audio.play();
+      audio.onended = () => URL.revokeObjectURL(url);
+      setBadge('voiceBadge', 'ok', '✓ VOICE: ELEVENLABS ACTIVE');
+    } catch(e) {
+      speakBrowser(text, vol);
+    }
+  } else {
+    speakBrowser(text, vol);
+  }
+}
+
+function speakBrowser(text, vol) {
+  speechSynthesis.cancel();
+  const utt = new SpeechSynthesisUtterance(text);
+  const sel = document.getElementById('voiceSelect');
+  if (voices.length && sel.value !== '') utt.voice = voices[parseInt(sel.value)];
+  utt.volume = vol;
+  utt.rate = 0.95;
+  utt.pitch = 0.82;
+  speechSynthesis.speak(utt);
+}
+
+/* ─── SCREAM ─── */
+function fireScream(count) {
+  ringCount++;
+  document.getElementById('ringCount').textContent = ringCount;
+  document.getElementById('screamN').textContent = String(ringCount).padStart(2,'0');
+
+  const msg = document.getElementById('msgInput').value.trim() ||
+    "What the hell are you doing?! Get back to work RIGHT NOW. Every second you waste is a second closer to failure. Move.";
+
+  document.getElementById('screamMsg').textContent = msg;
+  document.getElementById('scream').classList.add('active');
+
+  speak(msg);
+
+  // Flash body
+  document.body.style.background = '#1a0000';
+  setTimeout(() => { document.body.style.background = 'var(--black)'; }, 600);
+}
+
+function dismissScream() {
+  // Don't close scream yet — show log modal first
+  openLogModal();
+}
+
+function openLogModal() {
+  const mins = intervalMs > 0 ? Math.round(intervalMs / 60000) : '?';
+  document.getElementById('logModalSub').textContent =
+    `Interval #${ringCount} — what did you work on these last ${mins} min?`;
+  document.getElementById('logInput').value = '';
+  document.getElementById('logModal').classList.add('active');
+}
+
+function submitLog() {
+  const text = document.getElementById('logInput').value.trim();
+  addLogEntry(ringCount, text || null, false);
+  document.getElementById('logModal').classList.remove('active');
+  document.getElementById('scream').classList.remove('active');
+  speechSynthesis.cancel();
+}
+
+function skipLog() {
+  addLogEntry(ringCount, null, true);
+  document.getElementById('logModal').classList.remove('active');
+  document.getElementById('scream').classList.remove('active');
+  speechSynthesis.cancel();
+}
+
+function testScream() {
+  const c = ringCount;
+  fireScream(c);
+}
+
+/* ─── TIMER (system clock based) ─── */
+function startTimer() {
+  if (running) return;
+
+  const mins = parseInt(document.getElementById('intervalInput').value);
+  if (!mins || mins < 1) { alert('Set a valid interval.'); return; }
+
+  const extraRaw = document.getElementById('extraTimes').value;
+  const extraMins = extraRaw.split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n) && n > 0);
+
+  intervalMs = mins * 60 * 1000;
+  const now = Date.now();
+  startEpoch = now;
+  sessionStart = now;
+  nextRingEpoch = now + intervalMs;
+  extraRingEpochs = extraMins.map(m => now + m * 60 * 1000);
+  firedExtras = new Set();
+  ringCount = 0;
+  running = true;
+
+  document.getElementById('ringCount').textContent = '0';
+  document.getElementById('statusDot').classList.add('live');
+  document.getElementById('statusText').textContent = 'ACTIVE — NO ESCAPE';
+  document.getElementById('sessionClock').style.color = 'var(--white)';
+  document.getElementById('startBtn').disabled = true;
+
+  requestWakeLock();
+  startKeepAlive();
+
+  speak("Timer started. Clock is running. No more excuses. Get to work.");
+  tickTimer();
+}
+
+function tickTimer() {
+  if (!running) return;
+
+  const now = Date.now();
+
+  // Check extra rings
+  extraRingEpochs.forEach((ep, i) => {
+    if (!firedExtras.has(i) && now >= ep) {
+      firedExtras.add(i);
+      fireScream(ringCount);
+    }
+  });
+
+  // Check main interval ring
+  if (now >= nextRingEpoch) {
+    fireScream(ringCount);
+    // Advance to next interval (skip missed if tab was asleep)
+    while (nextRingEpoch <= now) {
+      nextRingEpoch += intervalMs;
+    }
+  }
+
+  // Time until next ring
+  const msLeft = nextRingEpoch - now;
+
+  // Also account for nearest extra
+  let nearestMs = msLeft;
+  extraRingEpochs.forEach((ep, i) => {
+    if (!firedExtras.has(i)) {
+      const diff = ep - now;
+      if (diff > 0 && diff < nearestMs) nearestMs = diff;
+    }
+  });
+
+  updateCountdown(Math.ceil(nearestMs / 1000));
+  updateSession(Math.floor((now - sessionStart) / 1000));
+
+  timerRAF = requestAnimationFrame(tickTimer);
+}
+
+function updateCountdown(secs) {
+  if (secs < 0) secs = 0;
+  const m = Math.floor(secs / 60).toString().padStart(2, '0');
+  const s = (secs % 60).toString().padStart(2, '0');
+  const el = document.getElementById('countdown');
+  el.textContent = `${m}:${s}`;
+  el.className = 'countdown';
+  const ratio = secs / (intervalMs / 1000);
+  if (ratio < 0.08) el.classList.add('danger');
+  else if (ratio < 0.2) el.classList.add('warn');
+}
+
+function updateSession(secs) {
+  const h = Math.floor(secs / 3600).toString().padStart(2,'0');
+  const m = Math.floor((secs % 3600) / 60).toString().padStart(2,'0');
+  const s = (secs % 60).toString().padStart(2,'0');
+  document.getElementById('sessionClock').textContent = `${h}:${m}:${s}`;
+}
+
+function stopTimer() {
+  running = false;
+  if (timerRAF) cancelAnimationFrame(timerRAF);
+  if (wakeLock && !wakeLock.released) wakeLock.release();
+  stopKeepAlive();
+  speechSynthesis.cancel();
+
+  document.getElementById('statusDot').classList.remove('live');
+  document.getElementById('statusText').textContent = 'STOPPED';
+  document.getElementById('sessionClock').style.color = '#2a2a2a';
+  document.getElementById('scream').classList.remove('active');
+  document.getElementById('startBtn').disabled = false;
+}
+
+/* ─── MISC ─── */
+document.getElementById('volRange').addEventListener('input', function() {
+  document.getElementById('volPct').textContent = Math.round(this.value * 100) + '%';
+});
+
+window.addEventListener('beforeunload', e => {
+  if (running) { e.preventDefault(); e.returnValue = ''; }
+});
+
+/* ─── SESSION LOG ─── */
+let sessionLog = [];
+let sessionDate = new Date().toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'numeric'});
+
+function addLogEntry(intervalNum, text, skipped) {
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString('en-IN', {hour12: false});
+  const mins = intervalMs > 0 ? Math.round(intervalMs / 60000) : 0;
+  const entry = {
+    interval: intervalNum,
+    time: timeStr,
+    duration: mins,
+    text: text,
+    skipped: skipped
+  };
+  sessionLog.push(entry);
+  renderLog();
+}
+
+function renderLog() {
+  const list = document.getElementById('logList');
+  const empty = document.getElementById('logEmpty');
+
+  // Always clear first
+  list.querySelectorAll('.log-entry').forEach(e => e.remove());
+
+  if (sessionLog.length === 0) {
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  [...sessionLog].reverse().forEach(e => {
+    const div = document.createElement('div');
+    div.className = 'log-entry ' + (e.skipped ? 'missed' : 'logged');
+    div.innerHTML = `
+      <div class="log-entry-meta">#${e.interval} &nbsp;·&nbsp; ${e.time} &nbsp;·&nbsp; ${e.duration} min</div>
+      <div class="log-entry-text">${e.skipped ? '<span style="color:#333">— skipped log —</span>' : escHtml(e.text)}</div>
+    `;
+    list.insertBefore(div, list.querySelector('.log-empty'));
+  });
+}
+
+function escHtml(str) {
+  if (!str) return '';
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function resetSession() {
+  if (running) {
+    if (!confirm('Timer is running. Reset session data (keeps API key & voice settings)?')) return;
+  }
+  // Stop timer if running
+  if (running) stopTimer();
+
+  // Reset counters
+  sessionLog = [];
+  ringCount = 0;
+  sessionSeconds = 0;
+  sessionDate = new Date().toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'numeric'});
+
+  document.getElementById('ringCount').textContent = '0';
+  document.getElementById('sessionClock').textContent = '00:00:00';
+  document.getElementById('sessionClock').style.color = '#2a2a2a';
+  document.getElementById('countdown').textContent = '--:--';
+  document.getElementById('countdown').className = 'countdown';
+  document.getElementById('statusDot').classList.remove('live');
+  document.getElementById('statusText').textContent = 'IDLE';
+  document.getElementById('startBtn').disabled = false;
+
+  renderLog();
+}
+
+function exportLog() {
+  if (sessionLog.length === 0) {
+    alert('No log entries yet. Complete at least one interval first.');
+    return;
+  }
+
+  const totalMins = sessionLog.reduce((a, e) => a + e.duration, 0);
+  const logged = sessionLog.filter(e => !e.skipped).length;
+  const skipped = sessionLog.filter(e => e.skipped).length;
+  const intervalMins = intervalMs > 0 ? Math.round(intervalMs / 60000) : 0;
+
+  let txt = '';
+  txt += '═══════════════════════════════════════════════════════\n';
+  txt += '  WAKEUP — FOCUS SESSION REPORT\n';
+  txt += '═══════════════════════════════════════════════════════\n';
+  txt += `  Date          : ${sessionDate}\n`;
+  txt += `  Interval      : ${intervalMins} minutes\n`;
+  txt += `  Total Screams : ${ringCount}\n`;
+  txt += `  Total Time    : ${totalMins} minutes (${(totalMins/60).toFixed(1)} hrs)\n`;
+  txt += `  Logged        : ${logged} intervals\n`;
+  txt += `  Skipped Log   : ${skipped} intervals\n`;
+  txt += '═══════════════════════════════════════════════════════\n\n';
+
+  txt += 'INTERVAL BREAKDOWN\n';
+  txt += '───────────────────────────────────────────────────────\n';
+  sessionLog.forEach(e => {
+    txt += `\n[#${String(e.interval).padStart(2,'0')}] ${e.time}  (${e.duration} min)\n`;
+    if (e.skipped) {
+      txt += `       — no log entry —\n`;
+    } else {
+      txt += `       ${e.text}\n`;
+    }
+  });
+
+  txt += '\n───────────────────────────────────────────────────────\n';
+  txt += `  Exported at ${new Date().toLocaleString('en-IN')}\n`;
+  txt += '═══════════════════════════════════════════════════════\n';
+
+  const blob = new Blob([txt], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `wakeup-session-${sessionDate.replace(/ /g,'-')}.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function setBadge(id, type, text) {
+  const el = document.getElementById(id);
+  el.className = 'badge badge-' + (type === 'ok' ? 'ok' : type === 'warn' ? 'warn' : 'off');
+  el.textContent = text;
+}
+</script>
+</body>
+</html>
