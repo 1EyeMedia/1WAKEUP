@@ -359,6 +359,27 @@
 
   .scream-dismiss:hover { background: rgba(0,0,0,0.5); }
 
+
+  .scream-interval {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 4px;
+    color: rgba(255,255,255,0.4);
+    text-transform: uppercase;
+    margin-bottom: 20px;
+  }
+
+  .scream-speaking {
+    margin-top: 20px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 3px;
+    color: rgba(255,255,255,0.5);
+    text-transform: uppercase;
+    animation: speakpulse 1s infinite alternate;
+  }
+
+  @keyframes speakpulse { from {opacity:0.3;} to {opacity:1;} }
   .scream-n {
     position: absolute;
     top: 18px; right: 22px;
@@ -568,8 +589,10 @@
 <!-- Scream Overlay -->
 <div class="scream" id="scream">
   <div class="scream-n" id="screamN">01</div>
+  <div class="scream-interval" id="screamInterval">INTERVAL #01</div>
   <div class="scream-msg" id="screamMsg">GET BACK TO WORK.</div>
-  <button class="scream-dismiss" onclick="dismissScream()">✓ I AM WORKING — DISMISS</button>
+  <div class="scream-speaking" id="screamSpeaking">🔊 SPEAKING...</div>
+  <button class="scream-dismiss" onclick="dismissScream()">✓ I AM WORKING</button>
 </div>
 
 <div class="container">
@@ -584,6 +607,8 @@
       <div class="badge badge-off" id="wlBadge">⬤ WAKE LOCK: CHECKING</div>
       <div class="badge badge-off" id="clkBadge">⬤ SYSTEM CLOCK: SYNCED</div>
       <div class="badge badge-off" id="voiceBadge">⬤ VOICE: BROWSER TTS</div>
+    <div class="badge badge-off" id="notifBadge">⬤ NOTIFICATIONS: CHECKING</div>
+    <div class="badge badge-off" id="sarvamBadge">⬤ SARVAM: NOT CONFIGURED</div>
     </div>
   </div>
 
@@ -616,6 +641,7 @@
       <div class="engine-tabs">
         <button class="etab active" onclick="switchEngine('browser', event)">Browser TTS</button>
         <button class="etab" onclick="switchEngine('elevenlabs', event)">ElevenLabs (Realistic)</button>
+      <button class="etab" onclick="switchEngine('sarvam', event)">Sarvam AI (Hindi)</button>
       </div>
 
       <div class="engine-panel active" id="panel-browser">
@@ -642,12 +668,50 @@
         <div class="hint">Free voices: Adam = pNInz6obpgDQGcFmaJgB &nbsp;|&nbsp; Josh = TxGEqnHWrfWFTfGW9XjX &nbsp;|&nbsp; <a href="https://elevenlabs.io/app/voice-library" target="_blank" style="color:#333">browse ↗</a></div>
       </div>
     </div>
+    <!-- Sarvam AI panel -->
+    <div class="engine-panel" id="panel-sarvam">
+      <div class="row" style="margin-bottom:8px">
+        <div class="field">
+          <input type="password" id="sarvamKey" placeholder="Sarvam api-subscription-key">
+        </div>
+        <button class="btn btn-test" style="flex:0;white-space:nowrap" onclick="testSarvamKey()">TEST KEY</button>
+      </div>
+      <div id="sarvamKeyStatus" class="hint" style="margin-bottom:10px;color:#2a2a2a">— paste key and click TEST KEY</div>
+      <div class="row" style="margin-bottom:8px">
+        <div class="field">
+          <select id="sarvamSpeaker">
+            <option value="shubh" selected>★ Shubh (Male)</option>
+            <option value="rahul">Rahul (Male)</option>
+            <option value="kabir">Kabir (Male)</option>
+            <option value="varun">Varun (Male)</option>
+            <option value="rohan">Rohan (Male)</option>
+            <option value="aditya">Aditya (Male)</option>
+            <option value="amit">Amit (Male)</option>
+            <option value="priya">Priya (Female)</option>
+            <option value="neha">Neha (Female)</option>
+            <option value="pooja">Pooja (Female)</option>
+          </select>
+        </div>
+        <button class="btn btn-test" style="flex:0;white-space:nowrap" onclick="testSarvamVoice()">TEST VOICE</button>
+      </div>
+      <div id="sarvamVoiceStatus" class="hint" style="margin-bottom:6px;color:#2a2a2a">— click TEST VOICE to hear a sample</div>
+      <div class="hint">Best for Hinglish. Uses bulbul:v3, hi-IN.</div>
+    </div>
 
     <!-- Volume -->
     <div class="vol-row" style="margin-top:8px">
       <span style="font-size:10px;letter-spacing:2px;color:var(--dim);white-space:nowrap;text-transform:uppercase">VOL</span>
       <input type="range" id="volRange" min="0" max="1" step="0.05" value="1">
       <span id="volPct" style="font-size:11px;color:var(--dim);width:34px;text-align:right">100%</span>
+    </div>
+
+    <!-- API Config Save/Load -->
+    <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+      <button class="btn-export" style="flex:1;font-size:11px;padding:8px 10px" onclick="exportConfig()">↓ SAVE API CONFIG</button>
+      <label class="btn-export" style="flex:1;font-size:11px;padding:8px 10px;text-align:center;cursor:pointer">
+        ↑ LOAD API CONFIG
+        <input type="file" id="configFileInput" accept=".json" style="display:none" onchange="importConfig(event)">
+      </label>
     </div>
 
     <!-- Buttons -->
@@ -750,8 +814,16 @@ async function reacquireWakeLock() {
 }
 
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && running && (!wakeLock || wakeLock.released)) {
-    requestWakeLock();
+  if (document.visibilityState === 'visible') {
+    if (running && (!wakeLock || wakeLock.released)) {
+      requestWakeLock();
+    }
+    // If scream overlay is active and we just came back to tab, speak again
+    if (document.getElementById('scream').classList.contains('active') ||
+        document.getElementById('logModal').classList.contains('active')) {
+      const msg = document.getElementById('screamMsg').textContent;
+      if (msg) setTimeout(() => speak(msg), 300);
+    }
   }
 });
 
@@ -773,6 +845,42 @@ function stopKeepAlive() {
 
 /* ─── CLOCK BADGE ─── */
 setBadge('clkBadge', 'ok', '✓ SYSTEM CLOCK: SYNCED');
+
+/* ─── NOTIFICATION PERMISSION ─── */
+let notifGranted = false;
+
+async function requestNotifPermission() {
+  if (!('Notification' in window)) {
+    setBadge('notifBadge', 'warn', '⚠ NOTIFICATIONS: NOT SUPPORTED');
+    return;
+  }
+  if (Notification.permission === 'granted') {
+    notifGranted = true;
+    setBadge('notifBadge', 'ok', '✓ NOTIFICATIONS: ALLOWED');
+    return;
+  }
+  if (Notification.permission === 'denied') {
+    setBadge('notifBadge', 'warn', '⚠ NOTIFICATIONS: BLOCKED — enable in browser settings');
+    return;
+  }
+  const perm = await Notification.requestPermission();
+  notifGranted = perm === 'granted';
+  setBadge('notifBadge', notifGranted ? 'ok' : 'warn',
+    notifGranted ? '✓ NOTIFICATIONS: ALLOWED' : '⚠ NOTIFICATIONS: BLOCKED — enable in browser settings');
+}
+
+requestNotifPermission();
+
+function fireNotification(msg) {
+  if (!notifGranted) return;
+  const n = new Notification('⚠ WAKEUP — GET BACK TO WORK', {
+    body: msg,
+    requireInteraction: true,   // stays on screen until dismissed
+    silent: false
+  });
+  // clicking notification focuses the tab
+  n.onclick = () => { window.focus(); n.close(); };
+}
 
 /* ─── REAL CLOCK ─── */
 function tickClock() {
@@ -903,6 +1011,8 @@ function switchEngine(e, evt) {
 
   if (e === 'elevenlabs') {
     setBadge('voiceBadge', 'warn', '⚠ VOICE: ENTER ELEVENLABS KEY');
+  } else if (e === 'sarvam') {
+    setBadge('voiceBadge', 'warn', '⚠ VOICE: ENTER SARVAM KEY');
   } else {
     setBadge('voiceBadge', 'ok', '✓ VOICE: BROWSER TTS READY');
   }
@@ -943,7 +1053,50 @@ async function speak(text) {
     } catch(e) {
       speakBrowser(text, vol);
     }
+  } else if (engine === 'sarvam') {
+    const key = document.getElementById('sarvamKey').value.trim();
+    if (!key) { speakBrowser(text, vol); return; }
+    speakSarvam(text, vol, key);
   } else {
+    speakBrowser(text, vol);
+  }
+}
+
+async function speakSarvam(text, vol, key) {
+  try {
+    const speaker = document.getElementById('sarvamSpeaker').value;
+    const res = await fetch('https://api.sarvam.ai/text-to-speech', {
+      method: 'POST',
+      headers: {
+        'api-subscription-key': key,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        text: text,
+        target_language_code: 'hi-IN',
+        speaker: speaker,
+        model: 'bulbul:v3'
+      })
+    });
+
+    if (!res.ok) {
+      console.error('Sarvam error:', res.status);
+      speakBrowser(text, vol);
+      return;
+    }
+
+    // Sarvam returns JSON with base64 audio
+    const data = await res.json();
+    const audioBase64 = data.audios?.[0];
+    if (!audioBase64) { speakBrowser(text, vol); return; }
+
+    const audioSrc = 'data:audio/wav;base64,' + audioBase64;
+    const audio = new Audio(audioSrc);
+    audio.volume = vol;
+    audio.play();
+    setBadge('sarvamBadge', 'ok', '✓ SARVAM: ACTIVE');
+  } catch(e) {
+    console.error('Sarvam fetch error:', e);
     speakBrowser(text, vol);
   }
 }
@@ -964,6 +1117,8 @@ function fireScream(count) {
   ringCount++;
   document.getElementById('ringCount').textContent = ringCount;
   document.getElementById('screamN').textContent = String(ringCount).padStart(2,'0');
+  document.getElementById('screamInterval').textContent = 'INTERVAL #' + String(ringCount).padStart(2,'0');
+  document.getElementById('screamSpeaking').style.display = 'block';
 
   const msg = document.getElementById('msgInput').value.trim() ||
     "What the hell are you doing?! Get back to work RIGHT NOW. Every second you waste is a second closer to failure. Move.";
@@ -972,6 +1127,9 @@ function fireScream(count) {
   document.getElementById('scream').classList.add('active');
 
   speak(msg);
+
+  // System notification for background tab
+  fireNotification(msg);
 
   // Flash body
   document.body.style.background = '#1a0000';
@@ -1126,6 +1284,162 @@ window.addEventListener('beforeunload', e => {
   if (running) { e.preventDefault(); e.returnValue = ''; }
 });
 
+/* ─── API CONFIG EXPORT / IMPORT ─── */
+function exportConfig() {
+  const config = {
+    version: 1,
+    elevenlabs: {
+      key: document.getElementById('elKey').value.trim(),
+      voiceId: document.getElementById('elVoiceId').value.trim()
+    },
+    sarvam: {
+      key: document.getElementById('sarvamKey').value.trim(),
+      speaker: document.getElementById('sarvamSpeaker').value
+    },
+    browserVoice: document.getElementById('voiceSelect').value,
+    warCry: document.getElementById('msgInput').value.trim(),
+    interval: document.getElementById('intervalInput').value
+  };
+
+  const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'wakeup-config.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importConfig(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const config = JSON.parse(e.target.result);
+
+      if (config.elevenlabs?.key)    document.getElementById('elKey').value = config.elevenlabs.key;
+      if (config.elevenlabs?.voiceId) document.getElementById('elVoiceId').value = config.elevenlabs.voiceId;
+      if (config.sarvam?.key)        document.getElementById('sarvamKey').value = config.sarvam.key;
+      if (config.sarvam?.speaker)    document.getElementById('sarvamSpeaker').value = config.sarvam.speaker;
+      if (config.warCry)             document.getElementById('msgInput').value = config.warCry;
+      if (config.interval)           document.getElementById('intervalInput').value = config.interval;
+      if (config.browserVoice)       document.getElementById('voiceSelect').value = config.browserVoice;
+
+      // Reset file input so same file can be loaded again
+      event.target.value = '';
+
+      // Flash green confirmation
+      const label = event.target.closest('label');
+      const orig = label.textContent.trim();
+      label.style.color = 'var(--green)';
+      label.style.borderColor = 'var(--green)';
+      setTimeout(() => {
+        label.style.color = '';
+        label.style.borderColor = '';
+      }, 2000);
+
+    } catch(err) {
+      alert('Invalid config file. Must be a wakeup-config.json file.');
+    }
+  };
+  reader.readAsText(file);
+}
+
+/* ─── SARVAM AI TESTS ─── */
+async function testSarvamKey() {
+  const key = document.getElementById('sarvamKey').value.trim();
+  const statusEl = document.getElementById('sarvamKeyStatus');
+  if (!key) { statusEl.style.color = 'var(--orange)'; statusEl.textContent = '⚠ Paste your Sarvam API key first.'; return; }
+
+  statusEl.style.color = '#444';
+  statusEl.textContent = '⏳ Testing key with a sample request...';
+
+  try {
+    const res = await fetch('https://api.sarvam.ai/text-to-speech', {
+      method: 'POST',
+      headers: { 'api-subscription-key': key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text: 'Uth. Kaam kar.',
+        target_language_code: 'hi-IN',
+        speaker: 'shubh',
+        model: 'bulbul:v3'
+      })
+    });
+
+    if (res.ok) {
+      statusEl.style.color = 'var(--green)';
+      statusEl.textContent = '✓ KEY VALID — Sarvam API connected';
+      setBadge('sarvamBadge', 'ok', '✓ SARVAM: KEY VERIFIED');
+      setBadge('voiceBadge', 'ok', '✓ VOICE: SARVAM READY');
+    } else if (res.status === 401 || res.status === 403) {
+      statusEl.style.color = 'var(--red)';
+      const errData = await res.json().catch(()=>({}));
+      statusEl.textContent = '✗ KEY REJECTED (' + res.status + '): ' + (errData?.error?.message || 'Check key at dashboard.sarvam.ai');
+      setBadge('sarvamBadge', 'warn', '✗ SARVAM: KEY INVALID');
+    } else {
+      const errData = await res.json().catch(()=>({}));
+      statusEl.style.color = 'var(--red)';
+      statusEl.textContent = '✗ Error ' + res.status + ': ' + (errData?.error?.message || errData?.detail || JSON.stringify(errData));
+    }
+  } catch(e) {
+    statusEl.style.color = 'var(--orange)';
+    statusEl.textContent = '⚠ Network error: ' + e.message;
+  }
+}
+
+async function testSarvamVoice() {
+  const key = document.getElementById('sarvamKey').value.trim();
+  const statusEl = document.getElementById('sarvamVoiceStatus');
+  const vol = parseFloat(document.getElementById('volRange').value);
+  const speaker = document.getElementById('sarvamSpeaker').value;
+
+  if (!key) { statusEl.style.color = 'var(--orange)'; statusEl.textContent = '⚠ Test your API key first.'; return; }
+
+  statusEl.style.color = '#444';
+  statusEl.textContent = '⏳ Generating voice sample...';
+
+  try {
+    const res = await fetch('https://api.sarvam.ai/text-to-speech', {
+      method: 'POST',
+      headers: { 'api-subscription-key': key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text: 'Uth. Kaam kar. Abhi.',
+        target_language_code: 'hi-IN',
+        speaker: speaker,
+        model: 'bulbul:v3'
+      })
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const audioBase64 = data.audios?.[0];
+      if (!audioBase64) {
+        statusEl.style.color = 'var(--red)';
+        statusEl.textContent = '✗ No audio returned — check API response';
+        return;
+      }
+      const audio = new Audio('data:audio/wav;base64,' + audioBase64);
+      audio.volume = vol;
+      audio.play();
+      statusEl.style.color = 'var(--green)';
+      statusEl.textContent = '✓ VOICE WORKS — playing sample now (' + speaker + ')';
+      setBadge('sarvamBadge', 'ok', '✓ SARVAM: VOICE VERIFIED');
+    } else if (res.status === 401 || res.status === 403) {
+      statusEl.style.color = 'var(--red)';
+      statusEl.textContent = '✗ API key rejected — recheck key';
+    } else {
+      const err = await res.json().catch(() => ({}));
+      statusEl.style.color = 'var(--red)';
+      statusEl.textContent = '✗ Error ' + res.status + ': ' + (err?.message || 'unknown');
+    }
+  } catch(e) {
+    statusEl.style.color = 'var(--orange)';
+    statusEl.textContent = '⚠ Network error: ' + e.message;
+  }
+}
+
 /* ─── SESSION LOG ─── */
 let sessionLog = [];
 let sessionDate = new Date().toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'numeric'});
@@ -1248,6 +1562,7 @@ function exportLog() {
 
 function setBadge(id, type, text) {
   const el = document.getElementById(id);
+  if (!el) return;
   el.className = 'badge badge-' + (type === 'ok' ? 'ok' : type === 'warn' ? 'warn' : 'off');
   el.textContent = text;
 }
