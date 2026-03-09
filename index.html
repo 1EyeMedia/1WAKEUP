@@ -1464,17 +1464,91 @@ document.addEventListener('click', function onFirstClick() {
   try { goFullscreen(); } catch(e) {}
 }, { once: true });
 
-// Keep-alive silent oscillator
+// ── ANTI-THROTTLE STACK ──────────────────────────────────────────
+// 1) Silent AudioContext oscillator (keeps audio thread alive)
 function startKeepAlive() {
-  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  const osc = audioCtx.createOscillator();
-  const gain = audioCtx.createGain();
-  gain.gain.value = 0.00001;
-  osc.connect(gain);
-  gain.connect(audioCtx.destination);
-  osc.start();
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    gain.gain.value = 0.00001;
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+  } catch(e) {}
 }
 startKeepAlive();
+
+// 2) Web Worker heartbeat — runs on a separate thread, immune to tab throttling
+//    The worker fires a message every 500ms regardless of tab visibility
+const workerBlob = new Blob([`
+  let interval = null;
+  self.onmessage = function(e) {
+    if (e.data === 'start') {
+      interval = setInterval(() => self.postMessage('tick'), 500);
+    } else if (e.data === 'stop') {
+      clearInterval(interval);
+    }
+  };
+`], { type: 'application/javascript' });
+const workerURL = URL.createObjectURL(workerBlob);
+const timerWorker = new Worker(workerURL);
+
+timerWorker.onmessage = function() {
+  // Worker tick drives the timer check — not throttled
+  if (!running) return;
+  const now = Date.now();
+  extraRingEpochs.forEach((ep, i) => {
+    if (!firedExtras.has(i) && now >= ep) { firedExtras.add(i); fireScream(); }
+  });
+  if (now >= nextRingEpoch) {
+    fireScream();
+    while (nextRingEpoch <= now) nextRingEpoch += intervalMs;
+  }
+};
+timerWorker.postMessage('start');
+
+// 3) setInterval backup (250ms) — double insurance alongside RAF
+setInterval(() => {
+  if (!running) return;
+  const now = Date.now();
+  extraRingEpochs.forEach((ep, i) => {
+    if (!firedExtras.has(i) && now >= ep) { firedExtras.add(i); fireScream(); }
+  });
+  if (now >= nextRingEpoch) {
+    fireScream();
+    while (nextRingEpoch <= now) nextRingEpoch += intervalMs;
+  }
+}, 250);
+
+// 4) Silent audio loop every 25s — tricks browser into thinking audio is playing
+function playSilentPing() {
+  try {
+    if (!audioCtx) return;
+    const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.1, audioCtx.sampleRate);
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf;
+    const g = audioCtx.createGain();
+    g.gain.value = 0.00001;
+    src.connect(g);
+    g.connect(audioCtx.destination);
+    src.start();
+  } catch(e) {}
+}
+setInterval(playSilentPing, 25000);
+
+// 5) Wake Lock re-acquire on visibility change
+if ('wakeLock' in navigator) {
+  let wl = null;
+  async function getWL() {
+    try { wl = await navigator.wakeLock.request('screen'); } catch(e) {}
+  }
+  getWL();
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') getWL();
+  });
+}
+// ─────────────────────────────────────────────────────────────────
 
 // Load voices
 speechSynthesis.onvoiceschanged = () => { voices = speechSynthesis.getVoices(); };
@@ -1537,7 +1611,13 @@ async function speak(text) {
   speechSynthesis.speak(utt);
 }
 
+let lastScreamEpoch = 0;
 function fireScream() {
+  // Dedup — 3 parallel timers may all trigger; ignore if fired within last 3s
+  const now = Date.now();
+  if (now - lastScreamEpoch < 3000) return;
+  lastScreamEpoch = now;
+
   ringCount++;
   document.getElementById('ringCount').textContent = ringCount;
   document.getElementById('intervalLbl').textContent = 'INTERVAL #' + String(ringCount).padStart(2,'0');
