@@ -1198,9 +1198,10 @@ function startTimer() {
   };
 
   // Open popup window — small, always on top, floats over work
-  const pw = 340, ph = 420;
-  const left = window.screen.width - pw - 20;
-  const top = 20;
+  const pw = window.screen.availWidth;
+  const ph = window.screen.availHeight;
+  const left = 0;
+  const top = 0;
   popupWin = window.open('', 'wakeup_timer',
     `width=${pw},height=${ph},left=${left},top=${top},resizable=yes,scrollbars=no,toolbar=no,menubar=no,location=no,status=no,alwaysRaised=yes`
   );
@@ -1266,7 +1267,7 @@ function buildPopupHTML(cfg) {
 <html>
 <head>
 <meta charset="UTF-8">
-<title>WAKEUP TIMER</title>
+<title>1WAKEUP</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Share+Tech+Mono&display=swap');
   * { margin:0; padding:0; box-sizing:border-box; }
@@ -1431,7 +1432,7 @@ function buildPopupHTML(cfg) {
 </head>
 <body>
 <div class="wrap">
-  <div class="title">WAKEUP</div>
+  <div class="title"><span style='color:#f0f0f0;text-shadow:2px 2px 0 #555'>1</span>WAKEUP</div>
   <div class="sub">no mercy. no comfort.</div>
   <div class="interval-lbl" id="intervalLbl">INTERVAL #00</div>
   <div class="countdown" id="countdown">--:--</div>
@@ -1470,6 +1471,18 @@ let firedExtras = new Set();
 let logQueue = [];
 let audioCtx = null;
 let voices = [];
+
+// Request fullscreen to hide browser chrome
+function goFullscreen() {
+  const el = document.documentElement;
+  if (el.requestFullscreen) el.requestFullscreen();
+  else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+  else if (el.mozRequestFullScreen) el.mozRequestFullScreen();
+}
+try { goFullscreen(); } catch(e) {}
+document.addEventListener('click', function onFirstClick() {
+  try { goFullscreen(); } catch(e) {}
+}, { once: true });
 
 // Keep-alive silent oscillator
 function startKeepAlive() {
