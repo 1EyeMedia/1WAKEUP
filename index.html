@@ -1465,7 +1465,7 @@ document.addEventListener('click', function onFirstClick() {
 }, { once: true });
 
 // ── ANTI-THROTTLE STACK ──────────────────────────────────────────
-// 1) Silent AudioContext oscillator (keeps audio thread alive)
+// 1) Silent AudioContext oscillator
 function startKeepAlive() {
   try {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -1479,50 +1479,18 @@ function startKeepAlive() {
 }
 startKeepAlive();
 
-// 2) Web Worker heartbeat — runs on a separate thread, immune to tab throttling
-//    The worker fires a message every 500ms regardless of tab visibility
-const workerBlob = new Blob([`
-  let interval = null;
-  self.onmessage = function(e) {
-    if (e.data === 'start') {
-      interval = setInterval(() => self.postMessage('tick'), 500);
-    } else if (e.data === 'stop') {
-      clearInterval(interval);
-    }
-  };
-`], { type: 'application/javascript' });
-const workerURL = URL.createObjectURL(workerBlob);
+// 2) Web Worker via data URI — no backtick conflict with outer template
+const workerCode = 'let t=null;self.onmessage=function(e){if(e.data==="start"){t=setInterval(function(){self.postMessage("tick");},500);}else if(e.data==="stop"){clearInterval(t);}};';
+const workerURL = URL.createObjectURL(new Blob([workerCode], {type:'application/javascript'}));
 const timerWorker = new Worker(workerURL);
-
-timerWorker.onmessage = function() {
-  // Worker tick drives the timer check — not throttled
-  if (!running) return;
-  const now = Date.now();
-  extraRingEpochs.forEach((ep, i) => {
-    if (!firedExtras.has(i) && now >= ep) { firedExtras.add(i); fireScream(); }
-  });
-  if (now >= nextRingEpoch) {
-    fireScream();
-    while (nextRingEpoch <= now) nextRingEpoch += intervalMs;
-  }
-};
+timerWorker.onmessage = checkTime;
 timerWorker.postMessage('start');
 
-// 3) setInterval backup (250ms) — double insurance alongside RAF
-setInterval(() => {
-  if (!running) return;
-  const now = Date.now();
-  extraRingEpochs.forEach((ep, i) => {
-    if (!firedExtras.has(i) && now >= ep) { firedExtras.add(i); fireScream(); }
-  });
-  if (now >= nextRingEpoch) {
-    fireScream();
-    while (nextRingEpoch <= now) nextRingEpoch += intervalMs;
-  }
-}, 250);
+// 3) setInterval backup every 500ms
+setInterval(checkTime, 500);
 
-// 4) Silent audio loop every 25s — tricks browser into thinking audio is playing
-function playSilentPing() {
+// 4) Silent audio ping every 25s keeps audio context alive
+setInterval(function() {
   try {
     if (!audioCtx) return;
     const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.1, audioCtx.sampleRate);
@@ -1534,19 +1502,28 @@ function playSilentPing() {
     g.connect(audioCtx.destination);
     src.start();
   } catch(e) {}
-}
-setInterval(playSilentPing, 25000);
+}, 25000);
 
-// 5) Wake Lock re-acquire on visibility change
+// 5) Wake Lock
 if ('wakeLock' in navigator) {
-  let wl = null;
-  async function getWL() {
-    try { wl = await navigator.wakeLock.request('screen'); } catch(e) {}
-  }
-  getWL();
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') getWL();
+  navigator.wakeLock.request('screen').catch(function(){});
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible') {
+      navigator.wakeLock.request('screen').catch(function(){});
+    }
   });
+}
+
+function checkTime() {
+  if (!running) return;
+  const now = Date.now();
+  extraRingEpochs.forEach(function(ep, i) {
+    if (!firedExtras.has(i) && now >= ep) { firedExtras.add(i); fireScream(); }
+  });
+  if (now >= nextRingEpoch) {
+    fireScream();
+    while (nextRingEpoch <= now) nextRingEpoch += intervalMs;
+  }
 }
 // ─────────────────────────────────────────────────────────────────
 
@@ -1727,7 +1704,7 @@ function stopTimer() {
   document.getElementById('statusDot').classList.remove('live');
   document.getElementById('statusText').textContent = 'STOPPED';
   document.getElementById('sessionClock').style.color = '#2a2a2a';
-  document.getElementById('scream').classList.remove('active');
+  // scream overlay removed
   document.getElementById('startBtn').disabled = false;
 }
 
