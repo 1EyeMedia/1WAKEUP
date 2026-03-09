@@ -1169,7 +1169,9 @@ function testScream() {
   fireScream(c);
 }
 
-/* ─── TIMER (system clock based) ─── */
+/* ─── POPUP TIMER WINDOW ─── */
+let popupWin = null;
+
 function startTimer() {
   if (running) return;
 
@@ -1177,70 +1179,480 @@ function startTimer() {
   if (!mins || mins < 1) { alert('Set a valid interval.'); return; }
 
   const extraRaw = document.getElementById('extraTimes').value;
-  const extraMins = extraRaw.split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n) && n > 0);
+  const config = {
+    intervalMins: mins,
+    extraMins: extraRaw.split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n) && n > 0),
+    msg: document.getElementById('msgInput').value.trim() || "MOTHERFUCKER GET UP. WHO TOLD YOU TO REST? GET YOUR ASS BACK TO WORK RIGHT NOW.",
+    engine: engine,
+    elKey: document.getElementById('elKey').value.trim(),
+    elVoiceId: document.getElementById('elVoiceId').value.trim() || 'pNInz6obpgDQGcFmaJgB',
+    sarvamKey: document.getElementById('sarvamKey').value.trim(),
+    sarvamSpeaker: document.getElementById('sarvamSpeaker').value,
+    browserVoiceIdx: document.getElementById('voiceSelect').value,
+    volume: parseFloat(document.getElementById('volRange').value),
+    startEpoch: Date.now(),
+    sessionStart: Date.now()
+  };
 
-  intervalMs = mins * 60 * 1000;
-  const now = Date.now();
-  startEpoch = now;
-  sessionStart = now;
-  nextRingEpoch = now + intervalMs;
-  extraRingEpochs = extraMins.map(m => now + m * 60 * 1000);
-  firedExtras = new Set();
-  ringCount = 0;
+  // Open popup window — small, always on top, floats over work
+  const pw = 340, ph = 420;
+  const left = window.screen.width - pw - 20;
+  const top = 20;
+  popupWin = window.open('', 'wakeup_timer',
+    `width=${pw},height=${ph},left=${left},top=${top},resizable=yes,scrollbars=no,toolbar=no,menubar=no,location=no,status=no,alwaysRaised=yes`
+  );
+
+  if (!popupWin || popupWin.closed) {
+    alert('Popup blocked! Allow popups for this site in your browser and try again.\n\nChrome: click the popup blocked icon in the address bar → Always allow.');
+    return;
+  }
+
+  // Write popup HTML
+  popupWin.document.open();
+  popupWin.document.write(buildPopupHTML(config));
+  popupWin.document.close();
+
+  // Track in main window
   running = true;
-
+  sessionStart = config.sessionStart;
+  ringCount = 0;
   document.getElementById('ringCount').textContent = '0';
   document.getElementById('statusDot').classList.add('live');
-  document.getElementById('statusText').textContent = 'ACTIVE — NO ESCAPE';
+  document.getElementById('statusText').textContent = 'ACTIVE — POPUP RUNNING';
   document.getElementById('sessionClock').style.color = 'var(--white)';
   document.getElementById('startBtn').disabled = true;
 
   requestWakeLock();
-  startKeepAlive();
 
-  speak("Timer started. Clock is running. No more excuses. Get to work.");
-  tickTimer();
+  // Poll popup for log entries and ring count
+  const pollInterval = setInterval(() => {
+    if (!popupWin || popupWin.closed) {
+      clearInterval(pollInterval);
+      running = false;
+      document.getElementById('statusDot').classList.remove('live');
+      document.getElementById('statusText').textContent = 'STOPPED — popup closed';
+      document.getElementById('startBtn').disabled = false;
+      return;
+    }
+    // Sync ring count from popup
+    try {
+      const pr = popupWin.getRingCount?.();
+      if (pr !== undefined) {
+        ringCount = pr;
+        document.getElementById('ringCount').textContent = ringCount;
+      }
+      // Sync session clock
+      const ps = popupWin.getSessionSecs?.();
+      if (ps !== undefined) updateSession(ps);
+      // Sync countdown
+      const pc = popupWin.getCountdownSecs?.();
+      if (pc !== undefined) updateCountdown(pc);
+      // Pull any new log entries
+      const logs = popupWin.drainLogQueue?.();
+      if (logs) logs.forEach(l => addLogEntry(l.interval, l.text, l.skipped));
+    } catch(e) {}
+  }, 500);
+
+  popupWin.onbeforeunload = () => {
+    clearInterval(pollInterval);
+  };
 }
 
-function tickTimer() {
-  if (!running) return;
+function buildPopupHTML(cfg) {
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>WAKEUP TIMER</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Share+Tech+Mono&display=swap');
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: #030303;
+    color: #f0f0f0;
+    font-family: 'Share Tech Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    position: relative;
+  }
+  body::before {
+    content:'';
+    position:fixed;
+    inset:0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,26,26,0.03) 2px, rgba(255,26,26,0.03) 4px);
+    pointer-events:none;
+  }
+  .wrap { text-align:center; padding:20px; width:100%; }
+  .title {
+    font-family:'Black Han Sans',sans-serif;
+    font-size:28px;
+    color:#ff1a1a;
+    letter-spacing:2px;
+    text-shadow: 2px 2px 0 #8b0000;
+    margin-bottom:4px;
+  }
+  .sub { font-size:9px; letter-spacing:3px; color:#444; text-transform:uppercase; margin-bottom:20px; }
+  .countdown {
+    font-family:'Black Han Sans',sans-serif;
+    font-size:86px;
+    letter-spacing:-4px;
+    line-height:1;
+    color:#f0f0f0;
+    transition: color 0.3s;
+  }
+  .countdown.warn { color:#ff8800; }
+  .countdown.danger { color:#ff1a1a; animation: pulse 0.5s infinite alternate; }
+  @keyframes pulse { from{opacity:1} to{opacity:0.5} }
+  .timer-sub { font-size:9px; letter-spacing:3px; color:#444; text-transform:uppercase; margin-top:6px; }
+  .ring-ct { font-size:10px; color:#333; letter-spacing:2px; margin-top:8px; }
+  .ring-ct b { color:#ff1a1a; font-size:14px; }
+  .session { font-size:11px; color:#333; letter-spacing:2px; margin-top:12px; }
+  .dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:#00ff88; box-shadow:0 0 6px #00ff88; animation:blink 1.2s infinite; margin-right:6px; vertical-align:middle; }
+  @keyframes blink {0%,100%{opacity:1}50%{opacity:0.2}}
+  .status { font-size:9px; letter-spacing:2px; color:#444; text-transform:uppercase; margin-top:10px; }
+  /* SCREAM STATE */
+  body.screaming { background:#c00000; animation: shake 0.08s infinite; }
+  @keyframes shake {
+    0%,100%{transform:translate(0,0)}
+    25%{transform:translate(-3px,2px)}
+    75%{transform:translate(3px,-2px)}
+  }
+  body.screaming .countdown { color:#fff; }
+  .scream-msg {
+    display:none;
+    font-family:'Black Han Sans',sans-serif;
+    font-size:18px;
+    color:#fff;
+    text-shadow:2px 2px 0 #000;
+    line-height:1.3;
+    margin: 14px 0;
+    padding: 0 10px;
+  }
+  body.screaming .scream-msg { display:block; }
+  .dismiss-btn {
+    display:none;
+    font-family:'Black Han Sans',sans-serif;
+    font-size:13px;
+    letter-spacing:2px;
+    text-transform:uppercase;
+    background:rgba(0,0,0,0.4);
+    border:1px solid rgba(255,255,255,0.3);
+    color:#fff;
+    padding:10px 20px;
+    cursor:pointer;
+    margin-top:10px;
+    width:90%;
+  }
+  body.screaming .dismiss-btn { display:block; }
+  body.screaming .timer-sub, body.screaming .ring-ct,
+  body.screaming .session, body.screaming .sub { color:rgba(255,255,255,0.4); }
+  .interval-lbl { font-size:9px; letter-spacing:3px; color:rgba(255,255,255,0); text-transform:uppercase; margin-bottom:6px; transition:color 0.3s; }
+  body.screaming .interval-lbl { color:rgba(255,255,255,0.5); }
+  .speaking-ind { display:none; font-size:9px; letter-spacing:2px; color:rgba(255,255,255,0.5); text-transform:uppercase; margin-top:6px; animation:speakpulse 1s infinite alternate; }
+  @keyframes speakpulse{from{opacity:0.3}to{opacity:1}}
+  body.screaming .speaking-ind { display:block; }
+  /* Log modal inside popup */
+  .log-overlay {
+    display:none;
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,0.95);
+    z-index:100;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    padding:16px;
+  }
+  .log-overlay.active { display:flex; }
+  .log-box { width:100%; }
+  .log-title { font-family:'Black Han Sans',sans-serif; font-size:18px; color:#00ff88; margin-bottom:4px; }
+  .log-sub { font-size:9px; letter-spacing:2px; color:#444; text-transform:uppercase; margin-bottom:10px; }
+  .log-box textarea {
+    width:100%;
+    background:#0a0a0a;
+    border:1px solid #1a1a1a;
+    border-left:3px solid #00ff88;
+    color:#f0f0f0;
+    font-family:'Share Tech Mono',monospace;
+    font-size:12px;
+    padding:10px;
+    resize:none;
+    outline:none;
+    height:70px;
+  }
+  .log-btns { display:flex; gap:8px; margin-top:8px; }
+  .log-submit {
+    flex:1;
+    font-family:'Black Han Sans',sans-serif;
+    font-size:13px;
+    letter-spacing:1px;
+    background:#00ff88;
+    color:#000;
+    border:none;
+    padding:10px;
+    cursor:pointer;
+    text-transform:uppercase;
+  }
+  .log-skip {
+    font-family:'Black Han Sans',sans-serif;
+    font-size:11px;
+    letter-spacing:1px;
+    background:transparent;
+    color:#444;
+    border:1px solid #222;
+    padding:10px 14px;
+    cursor:pointer;
+    text-transform:uppercase;
+  }
+  .stop-btn {
+    position:fixed;
+    bottom:12px;
+    left:50%;
+    transform:translateX(-50%);
+    font-family:'Share Tech Mono',monospace;
+    font-size:9px;
+    letter-spacing:2px;
+    text-transform:uppercase;
+    background:transparent;
+    border:1px solid #1a1a1a;
+    color:#2a2a2a;
+    padding:6px 16px;
+    cursor:pointer;
+  }
+  .stop-btn:hover { color:#ff1a1a; border-color:#ff1a1a; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="title">WAKEUP</div>
+  <div class="sub">no mercy. no comfort.</div>
+  <div class="interval-lbl" id="intervalLbl">INTERVAL #00</div>
+  <div class="countdown" id="countdown">--:--</div>
+  <div class="timer-sub">until next scream</div>
+  <div class="scream-msg" id="screamMsg">${cfg.msg}</div>
+  <div class="speaking-ind">🔊 SCREAMING...</div>
+  <button class="dismiss-btn" onclick="dismissScream()">✓ I AM WORKING</button>
+  <div class="ring-ct" style="margin-top:14px">Screamed <b id="ringCount">0</b> times</div>
+  <div class="session" id="sessionClock">SESSION 00:00:00</div>
+  <div class="status"><span class="dot"></span>ACTIVE</div>
+</div>
 
+<!-- Log overlay -->
+<div class="log-overlay" id="logOverlay">
+  <div class="log-box">
+    <div class="log-title">✓ STILL WORKING</div>
+    <div class="log-sub" id="logSub">What did you do?</div>
+    <textarea id="logInput" placeholder="e.g. Solved 15 GAT questions..."></textarea>
+    <div class="log-btns">
+      <button class="log-submit" onclick="submitLog()">LOG IT</button>
+      <button class="log-skip" onclick="skipLog()">SKIP</button>
+    </div>
+  </div>
+</div>
+
+<button class="stop-btn" onclick="stopTimer()">■ STOP TIMER</button>
+
+<script>
+const CFG = ${JSON.stringify(cfg)};
+let running = true;
+let ringCount = 0;
+let nextRingEpoch = CFG.startEpoch + CFG.intervalMins * 60000;
+let intervalMs = CFG.intervalMins * 60000;
+let extraRingEpochs = CFG.extraMins.map(m => CFG.startEpoch + m * 60000);
+let firedExtras = new Set();
+let logQueue = [];
+let audioCtx = null;
+let voices = [];
+
+// Keep-alive silent oscillator
+function startKeepAlive() {
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  gain.gain.value = 0.00001;
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start();
+}
+startKeepAlive();
+
+// Load voices
+speechSynthesis.onvoiceschanged = () => { voices = speechSynthesis.getVoices(); };
+voices = speechSynthesis.getVoices();
+
+// Exported functions for parent to poll
+window.getRingCount = () => ringCount;
+window.getSessionSecs = () => Math.floor((Date.now() - CFG.sessionStart) / 1000);
+window.getCountdownSecs = () => Math.ceil((nextRingEpoch - Date.now()) / 1000);
+window.drainLogQueue = () => { const q = [...logQueue]; logQueue = []; return q; };
+
+async function speak(text) {
+  const vol = CFG.volume;
+  if (CFG.engine === 'elevenlabs' && CFG.elKey) {
+    try {
+      const res = await fetch('https://api.elevenlabs.io/v1/text-to-speech/' + CFG.elVoiceId, {
+        method:'POST',
+        headers:{'xi-api-key':CFG.elKey,'Content-Type':'application/json'},
+        body:JSON.stringify({text,model_id:'eleven_turbo_v2',voice_settings:{stability:0.35,similarity_boost:0.85,style:0.4,use_speaker_boost:true}})
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audio.volume = vol;
+        audio.play();
+        audio.onended = () => URL.revokeObjectURL(url);
+        return;
+      }
+    } catch(e) {}
+  } else if (CFG.engine === 'sarvam' && CFG.sarvamKey) {
+    try {
+      const res = await fetch('https://api.sarvam.ai/text-to-speech', {
+        method:'POST',
+        headers:{'api-subscription-key':CFG.sarvamKey,'Content-Type':'application/json'},
+        body:JSON.stringify({text,target_language_code:'hi-IN',speaker:CFG.sarvamSpeaker,model:'bulbul:v3'})
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const audioBase64 = data.audios?.[0];
+        if (audioBase64) {
+          const audio = new Audio('data:audio/wav;base64,' + audioBase64);
+          audio.volume = vol;
+          audio.play();
+          return;
+        }
+      }
+    } catch(e) {}
+  }
+  // Fallback browser TTS
+  speechSynthesis.cancel();
+  const utt = new SpeechSynthesisUtterance(text);
+  if (voices.length && CFG.browserVoiceIdx !== '') {
+    const v = speechSynthesis.getVoices()[parseInt(CFG.browserVoiceIdx)];
+    if (v) utt.voice = v;
+  }
+  utt.volume = vol;
+  utt.rate = 0.95;
+  utt.pitch = 0.82;
+  speechSynthesis.speak(utt);
+}
+
+function fireScream() {
+  ringCount++;
+  document.getElementById('ringCount').textContent = ringCount;
+  document.getElementById('intervalLbl').textContent = 'INTERVAL #' + String(ringCount).padStart(2,'0');
+  document.getElementById('screamMsg').textContent = CFG.msg;
+  document.body.classList.add('screaming');
+  speak(CFG.msg);
+  // System notification
+  if (Notification.permission === 'granted') {
+    const n = new Notification('⚠ WAKEUP', { body: CFG.msg, requireInteraction: true });
+    n.onclick = () => { window.focus(); n.close(); };
+  }
+}
+
+function dismissScream() {
+  document.body.classList.remove('screaming');
+  speechSynthesis.cancel();
+  // Show log overlay
+  const mins = CFG.intervalMins;
+  document.getElementById('logSub').textContent = 'Interval #' + ringCount + ' — what did you do these last ' + mins + ' min?';
+  document.getElementById('logInput').value = '';
+  document.getElementById('logOverlay').classList.add('active');
+}
+
+function submitLog() {
+  const text = document.getElementById('logInput').value.trim();
+  logQueue.push({ interval: ringCount, text: text || null, skipped: false });
+  document.getElementById('logOverlay').classList.remove('active');
+}
+
+function skipLog() {
+  logQueue.push({ interval: ringCount, text: null, skipped: true });
+  document.getElementById('logOverlay').classList.remove('active');
+}
+
+function stopTimer() {
+  running = false;
+  window.close();
+}
+
+function formatTime(s) {
+  if (s < 0) s = 0;
+  return String(Math.floor(s/60)).padStart(2,'0') + ':' + String(s%60).padStart(2,'0');
+}
+
+function formatSession(s) {
+  return String(Math.floor(s/3600)).padStart(2,'0') + ':' +
+         String(Math.floor((s%3600)/60)).padStart(2,'0') + ':' +
+         String(s%60).padStart(2,'0');
+}
+
+function tick() {
+  if (!running) return;
   const now = Date.now();
 
-  // Check extra rings
+  // Check extras
   extraRingEpochs.forEach((ep, i) => {
-    if (!firedExtras.has(i) && now >= ep) {
-      firedExtras.add(i);
-      fireScream(ringCount);
-    }
+    if (!firedExtras.has(i) && now >= ep) { firedExtras.add(i); fireScream(); }
   });
 
-  // Check main interval ring
+  // Check main interval
   if (now >= nextRingEpoch) {
-    fireScream(ringCount);
-    // Advance to next interval (skip missed if tab was asleep)
-    while (nextRingEpoch <= now) {
-      nextRingEpoch += intervalMs;
-    }
+    fireScream();
+    while (nextRingEpoch <= now) nextRingEpoch += intervalMs;
   }
 
-  // Time until next ring
-  const msLeft = nextRingEpoch - now;
-
-  // Also account for nearest extra
-  let nearestMs = msLeft;
+  // Update countdown
+  let nearest = nextRingEpoch - now;
   extraRingEpochs.forEach((ep, i) => {
-    if (!firedExtras.has(i)) {
-      const diff = ep - now;
-      if (diff > 0 && diff < nearestMs) nearestMs = diff;
-    }
+    if (!firedExtras.has(i)) { const d = ep - now; if (d > 0 && d < nearest) nearest = d; }
   });
 
-  updateCountdown(Math.ceil(nearestMs / 1000));
-  updateSession(Math.floor((now - sessionStart) / 1000));
+  const secs = Math.ceil(nearest / 1000);
+  const el = document.getElementById('countdown');
+  el.textContent = formatTime(secs);
+  el.className = 'countdown';
+  const ratio = secs / (intervalMs / 1000);
+  if (ratio < 0.08) el.classList.add('danger');
+  else if (ratio < 0.2) el.classList.add('warn');
 
-  timerRAF = requestAnimationFrame(tickTimer);
+  // Session clock
+  const sessionSecs = Math.floor((now - CFG.sessionStart) / 1000);
+  document.getElementById('sessionClock').textContent = 'SESSION ' + formatSession(sessionSecs);
+
+  requestAnimationFrame(tick);
 }
+
+// Request notification permission
+Notification.requestPermission();
+
+speak("Timer started. No more excuses. Get to work.");
+tick();
+<\/script>
+</body>
+</html>`;
+}
+
+function stopTimer() {
+  if (popupWin && !popupWin.closed) popupWin.close();
+  running = false;
+  if (timerRAF) cancelAnimationFrame(timerRAF);
+  if (wakeLock && !wakeLock.released) wakeLock.release();
+  stopKeepAlive();
+  speechSynthesis.cancel();
+  document.getElementById('statusDot').classList.remove('live');
+  document.getElementById('statusText').textContent = 'STOPPED';
+  document.getElementById('sessionClock').style.color = '#2a2a2a';
+  document.getElementById('scream').classList.remove('active');
+  document.getElementById('startBtn').disabled = false;
+}
+
+// tickTimer moved to popup window
 
 function updateCountdown(secs) {
   if (secs < 0) secs = 0;
@@ -1261,19 +1673,7 @@ function updateSession(secs) {
   document.getElementById('sessionClock').textContent = `${h}:${m}:${s}`;
 }
 
-function stopTimer() {
-  running = false;
-  if (timerRAF) cancelAnimationFrame(timerRAF);
-  if (wakeLock && !wakeLock.released) wakeLock.release();
-  stopKeepAlive();
-  speechSynthesis.cancel();
-
-  document.getElementById('statusDot').classList.remove('live');
-  document.getElementById('statusText').textContent = 'STOPPED';
-  document.getElementById('sessionClock').style.color = '#2a2a2a';
-  document.getElementById('scream').classList.remove('active');
-  document.getElementById('startBtn').disabled = false;
-}
+// stopTimer moved to startTimer block above
 
 /* ─── MISC ─── */
 document.getElementById('volRange').addEventListener('input', function() {
