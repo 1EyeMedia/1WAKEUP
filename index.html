@@ -55,13 +55,13 @@
   .top-bar {
     grid-column: 1 / -1;
     display: flex;
-    align-items: flex-end;
+    align-items: center;
     justify-content: space-between;
     padding-bottom: 20px;
     border-bottom: 1px solid #0f0f0f;
     margin-bottom: 28px;
-    flex-wrap: wrap;
-    gap: 12px;
+    flex-wrap: nowrap;
+    gap: 16px;
   }
 
   .col-left { grid-column: 1; }
@@ -598,18 +598,21 @@
 <div class="container">
 
   <!-- TOP BAR -->
-  <div class="top-bar">
-    <div>
-      <div class="brand">WAKEUP</div>
+  <div class="top-bar" style="align-items:center;">
+    <div style="display:flex;flex-direction:column;align-items:flex-start;">
+      <div class="brand"><span style="color:#f0f0f0;text-shadow:4px 4px 0 #555, 0 0 40px rgba(255,255,255,0.2)">1</span>WAKEUP</div>
       <div class="tagline">No mercy. No comfort. Just work.</div>
     </div>
-    <div class="badges">
+    <div class="badges" style="flex:1;justify-content:center;">
       <div class="badge badge-off" id="wlBadge">⬤ WAKE LOCK: CHECKING</div>
       <div class="badge badge-off" id="clkBadge">⬤ SYSTEM CLOCK: SYNCED</div>
       <div class="badge badge-off" id="voiceBadge">⬤ VOICE: BROWSER TTS</div>
-    <div class="badge badge-off" id="notifBadge">⬤ NOTIFICATIONS: CHECKING</div>
-    <div class="badge badge-off" id="sarvamBadge">⬤ SARVAM: NOT CONFIGURED</div>
+      <div class="badge badge-off" id="notifBadge">⬤ NOTIFICATIONS: CHECKING</div>
+      <div class="badge badge-off" id="sarvamBadge">⬤ SARVAM: NOT CONFIGURED</div>
     </div>
+    <img src="https://i.ibb.co/rfs2sDK5/Whats-App-Image-2026-02-12-at-11-40-19-PM-removebg-preview.png"
+         alt="1WAKEUP Logo"
+         style="height:clamp(50px,8vw,80px);width:auto;object-fit:contain;filter:drop-shadow(0 0 12px rgba(255,26,26,0.35));flex-shrink:0;margin-left:auto;">
   </div>
 
   <!-- LEFT COL: CONFIG -->
